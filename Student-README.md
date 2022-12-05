@@ -32,10 +32,49 @@ we use flat directory structure as possible
 
 ## Technologies Used
 
-- react - version 18.1.0 - for dom manipulation
-- i18next - version 21.9.1 - use for translation
-- papaparse - version 5.3.2 - use for CSV export
-- react-router-dom - version 6.3.0 - use for routing
+- react - version 18.1.0 - for dom manipulation -> [repository](https://github.com/facebook/react)
+- i18next - version 21.9.1 - use for translation -> [repository](https://github.com/i18next/i18next)
+- papaparse - version 5.3.2 - use for CSV export -> [repository](https://github.com/mholt/PapaParse)
+- react-router-dom - version 6.3.0 - use for routing -> [repository](https://github.com/remix-run/react-router)
+- nginx - version 1.21.1 - for deployment -> [repository](https://github.com/nginx/nginx)
+- docker - version 20.10.14 - use in deployment [repository](https://github.com/docker)
+
+## Recommended Hardware
+
+* ubuntu 18
+* minimum of 25gb storage
+* minimum of 1gb ram
+* minimum of 1 CPU
+
+## Maintenance
+
+to deploy this system in production we use nginx in docker environment
+first build the code
+```
+yarn build
+```
+after code is built you can use git to push your build folder to your repository
+```
+# add all changes
+git add .
+# commit your release
+git commit -m "publish"
+# push to the repository
+git push
+```
+after you login to your server you can pull your changes
+```
+# goto your project folder
+cd sushi-student
+# pull your changes
+git pull
+# run docker
+docker-compose up
+```
+
+## Troubleshooting and debugging
+* clear cache - clear cache your browser if the changes from the server not reflected
+* check API - if there's the system is not responding check the API if its running
 
 ## Installation
 

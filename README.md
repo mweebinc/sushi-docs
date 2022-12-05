@@ -32,10 +32,50 @@ we use flat directory structure as possible
 
 ## Technologies Used
 
-- react - version 18.1.0 - for dom manipulation
-- i18next - version 21.9.1 - use for translation
-- papaparse - version 5.3.2 - use for CSV export
-- react-router-dom - version 6.3.0 - use for routing
+- react - version 18.1.0 - for dom manipulation -> [repository](https://github.com/facebook/react)
+- i18next - version 21.9.1 - use for translation -> [repository](https://github.com/i18next/i18next)
+- papaparse - version 5.3.2 - use for CSV export -> [repository](https://github.com/mholt/PapaParse)
+- react-router-dom - version 6.3.0 - use for routing -> [repository](https://github.com/remix-run/react-router)
+- nginx - version 1.21.1 - for deployment -> [repository](https://github.com/nginx/nginx)
+- docker - version 20.10.14 - use in deployment [repository](https://github.com/docker)
+
+## Recommended Hardware
+
+* ubuntu 18
+* minimum of 25gb storage
+* minimum of 1gb ram
+* minimum of 1 CPU
+
+## Maintenance
+
+to deploy this system in production we use nginx in docker environment
+first build the code
+```
+yarn build
+```
+after code is built you can use git to push your build folder to your repository
+```
+# add all changes
+git add .
+# commit your release
+git commit -m "publish"
+# push to the repository
+git push
+```
+after you login to your server you can pull your changes
+```
+# goto your project folder
+cd sushi-admin
+# pull your changes
+git pull
+# run docker
+docker-compose up
+```
+
+## Troubleshooting and debugging
+* clear cache - clear cache your browser if the changes from the server not reflected
+* check API - if there's the system is not responding check the API if its running
+
 
 ## Installation
 
@@ -73,6 +113,8 @@ yarn start
 
 * [ReactJS Docs](https://reactjs.org/docs/getting-started.html)
 
+
+
 # sushi-student
 
 > sushi-student this code is from sushi e-learning system with model integration
@@ -107,10 +149,49 @@ we use flat directory structure as possible
 
 ## Technologies Used
 
-- react - version 18.1.0 - for dom manipulation
-- i18next - version 21.9.1 - use for translation
-- papaparse - version 5.3.2 - use for CSV export
-- react-router-dom - version 6.3.0 - use for routing
+- react - version 18.1.0 - for dom manipulation -> [repository](https://github.com/facebook/react)
+- i18next - version 21.9.1 - use for translation -> [repository](https://github.com/i18next/i18next)
+- papaparse - version 5.3.2 - use for CSV export -> [repository](https://github.com/mholt/PapaParse)
+- react-router-dom - version 6.3.0 - use for routing -> [repository](https://github.com/remix-run/react-router)
+- nginx - version 1.21.1 - for deployment -> [repository](https://github.com/nginx/nginx)
+- docker - version 20.10.14 - use in deployment [repository](https://github.com/docker)
+
+## Recommended Hardware
+
+* ubuntu 18
+* minimum of 25gb storage
+* minimum of 1gb ram
+* minimum of 1 CPU
+
+## Maintenance
+
+to deploy this system in production we use nginx in docker environment
+first build the code
+```
+yarn build
+```
+after code is built you can use git to push your build folder to your repository
+```
+# add all changes
+git add .
+# commit your release
+git commit -m "publish"
+# push to the repository
+git push
+```
+after you login to your server you can pull your changes
+```
+# goto your project folder
+cd sushi-student
+# pull your changes
+git pull
+# run docker
+docker-compose up
+```
+
+## Troubleshooting and debugging
+* clear cache - clear cache your browser if the changes from the server not reflected
+* check API - if there's the system is not responding check the API if its running
 
 ## Installation
 
@@ -148,6 +229,8 @@ yarn start
 
 * [ReactJS Docs](https://reactjs.org/docs/getting-started.html)
 
+
+
 # sushi-api
 
 > sushi-api this code is from sushi e-learning system with model integration
@@ -181,10 +264,39 @@ we use flat directory structure as possible
 
 ## Technologies Used
 
-- nodejs - version 16.16.0 - the runtime environment to run JavaScript as backend API
-- express - version 4.18.1 - the framework we in routing and to parse JSON data
-- mongodb - version 4.8.0 - the database we use
+- nodejs - version 16.16.0 - the runtime environment to run JavaScript as backend API  -> [repository](https://github.com/nodejs/node)
+- express - version 4.18.1 - the framework we in routing and to parse JSON data -> [repository](https://github.com/expressjs/express)
+- mongodb - version 4.8.0 - the database we use  -> [repository](https://github.com/mongodb/mongo)
+- docker - version 20.10.14 - use in deployment [repository](https://github.com/docker)
 
+## Recommended Hardware
+* ubuntu 18
+* minimum of 50gb storage
+* minimum of 1gb ram
+* minimum of 1 CPU
+## Maintenance
+
+to deploy this system in production docker environment
+```
+# add all changes
+git add .
+# commit your release
+git commit -m "publish"
+# push to the repository
+git push
+```
+after you login to your server you can pull your changes
+```
+# goto your project folder
+cd sushi-api
+# pull your changes
+git pull
+# run docker
+docker-compose up
+```
+## Troubleshooting and debugging
+* change not reflected - try to restart the container using docker restart sushi-api
+* check if running - visit your API endpoint example https://api.jsla.academy/v1 expected has response of unauthorized
 ## Installation
 
 first clone this package
@@ -215,6 +327,4 @@ npm start
 ## reference
 
 * [NodeJS Docs](https://nodejs.org/en/docs/)
-
-
 

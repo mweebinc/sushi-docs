@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="sushi-docs">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/admin-use-cases-jp.zip!/" />
+      <root url="jar://$PROJECT_DIR$/student-use-cases-jp.zip!/" />
+      <root url="jar://$PROJECT_DIR$/admin-use-cases-en.zip!/" />
+      <root url="jar://$PROJECT_DIR$/student-use-cases-en.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
