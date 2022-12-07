@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/database/DatabaseController.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/database/DatabaseController.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const transformInclude = require('./mapper/transformInclude');
+const filterField = require('./filterField');
+const filterInclude = require('./filterInclude');
+const resolveRelation = require('./resolveRelation');
+const includeRelation = require('./includeRelation');
+const includePointer = require('./includePointer');
+const savePointer = require('./savePointer');
+const saveRelation = require('./saveRelation');
+const relationQuery = require('./relationQuery');
+
+/**
+ * This class handle the data manipulation
+ */
+class DatabaseController {
+    /**
+     * @param databaseAdapter
+     * @param schemaController
+     */
+    constructor(databaseAdapter, schemaController) {
+        this.databaseAdapter = databaseAdapter;
+        this.schemaController = schemaController;
+    }
+
+    addReadACL(query, acl) {
+        //null means if nothing
+        query['acl.read'] = {$in: [null, ...acl]};
+        return query;
+    }
+
+    addWriteCL(query, acl) {
+        query['acl.write'] = {$in: [null, ...acl]};
+        return query;
+    }
+
+    /**
+     * Insert object to database
+     * @param acl
+     * @param name
+     * @param object
+     * @param options
+     * @returns {Promise&lt;void>}
+     */
+    insert(acl, name, object, options) {
+        const isMaster = acl.includes(null);
+        let schema;
+        let newObject;
+        return Promise.resolve()
+            .then(() => this.validate(acl, name, 'create'))
+            .then(() => this.schemaController.validateType(name, object))
+            .then(() => this.schemaController.validateValue(name, object))
+            .then(() => this.schemaController.getSchema(name))
+            .then((s) => {
+                schema = s;
+            })
+            .then(() => this.schemaController.addDefault(acl, name, object))
+            .then((obj) => this.schemaController.transformValue(name, obj))
+            .then((obj) => this.savePointer(acl, schema.fields, name, obj))
+            .then((obj) => this.saveRelation(acl, schema.fields, name, obj))
+            .then((obj) => {
+                newObject = obj;
+            })
+            .then(() => this.databaseAdapter.insert(schema, newObject, options))
+            .then(() => {
+                return isMaster ? Promise.resolve() : this.schemaController.hideHidden(name, [newObject])
+                    .then(([object]) => {
+                        newObject = object;
+                    });
+            })
+            .then(() => newObject);
+    }
+
+    /**
+     * Save Another object has relation to the current Object
+     * @param acl
+     * @param fields
+     * @param name
+     * @param object
+     * @returns {Promise&lt;*>|*}
+     */
+    savePointer(acl, fields, name, object) {
+        const keys = filterField(fields, "Pointer")
+            .filter(key => object[key] &amp;&amp; !object[key].id);
+        return savePointer(this, acl, fields, name, object, keys);
+    }
+
+    /**
+     * Same list of objects has relation to the current Object
+     * @param acl
+     * @param fields
+     * @param collection
+     * @param object
+     * @returns {Promise&lt;*>}
+     */
+    saveRelation(acl, fields, collection, object) {
+        const keys = filterField(fields, "Relation")
+            .filter(key => object[key] &amp;&amp; object[key].length);
+        return saveRelation(this, acl, fields, collection, object, keys, 0);
+    }
+
+    /**
+     * Validate the Object
+     * @param acl
+     * @param name
+     * @param operation
+     * @returns {Promise&lt;unknown[]>}
+     */
+    validate(acl, name, operation) {
+        const validations = [];
+        validations.push(this.schemaController.isExist(name));
+        validations.push(this.schemaController.validatePermission(acl, name, operation));
+        return Promise.all(validations);
+    }
+
+    /**
+     * Query objects
+     * @param acl
+     * @param collection
+     * @param query
+     * @param _options
+     * @returns {Promise&lt;unknown>}
+     */
+    find(acl, collection, query = {}, _options = {}) {
+        const isMaster = acl.includes(null);
+        query = isMaster ? query : this.addReadACL(query, acl);
+        const {include, ...options} = _options;
+        let schema;
+        const operation = query.id ? 'get' : 'find';
+        return Promise.resolve()
+            .then(() => this.validate(acl, collection, operation))
+            .then(() => this.schemaController.getSchema(collection))
+            .then((_schema) => {
+                schema = _schema;
+            })
+            .then(() => this.relationQuery(schema.fields, collection, query))
+            .then((query) => this.databaseAdapter.find(schema, query, options))
+            .then(objects => {
+                return isMaster ? objects : this.schemaController.hideHidden(collection, objects);
+            })
+            .then(objects => this.includePointer(acl, schema.fields, include, objects))
+            .then(objects => this.includeRelation(acl, schema.fields, collection, include, objects))
+    }
+
+    relationQuery(fields, collection, query) {
+        const keys = filterField(fields, "Relation")
+            .filter(key => query[key]);
+        return relationQuery(this.databaseAdapter, collection, query, keys);
+    }
+
+    /**
+     * Update Object
+     * @param acl
+     * @param name
+     * @param query
+     * @param object
+     * @param options
+     * @returns {Promise&lt;unknown>}
+     */
+    update(acl, name, query, object, options) {
+        const isMaster = acl.includes(null);
+        query = isMaster ? query : this.addWriteCL(query, acl);
+        let schema;
+        return Promise.resolve()
+            .then(() => this.validate(acl, name, 'update'))
+            .then(() => this.schemaController.validateType(name, object))
+            .then(() => this.schemaController.validateValue(name, object, true))
+            .then(() => this.schemaController.getSchema(name))
+            .then((s) => {
+                schema = s;
+            })
+            .then(() => this.schemaController.addDefault(acl, name, object, true))
+            .then((object) => this.schemaController.transformValue(name, object))
+            .then((object) => this.saveRelation(acl, schema.fields, name, object))
+            .then((object) => this.databaseAdapter.update(schema, query, object, options))
+            .then((object) => {
+                return isMaster ? Promise.resolve(object) : this.schemaController.hideHidden(name, [object])
+                    .then(([object]) => object);
+            });
+    }
+
+    /**
+     * Include other object related to the current Object
+     * @param acl
+     * @param fields
+     * @param includes
+     * @param objects
+     * @returns {Promise&lt;*>|*}
+     */
+    includePointer(acl, fields, includes, objects) {
+        if (includes &amp;&amp; includes.length > 0) {
+            const isAll = includes.includes('all');
+            const include = transformInclude(isAll ? filterField(fields, 'Pointer') : includes);
+            return includePointer(this, acl, fields, objects, filterInclude(include, fields, 'Pointer'));
+        }
+        return objects;
+    }
+
+    /**
+     * Include Relation
+     * @param acl
+     * @param fields
+     * @param collection
+     * @param includes
+     * @param objects
+     * @returns {Promise&lt;*>|*}
+     */
+    includeRelation(acl, fields, collection, includes, objects) {
+        if (includes &amp;&amp; includes.length > 0) {
+            const isAll = includes.includes('all');
+            const include = transformInclude(isAll ? filterField(fields, 'Relation') : includes);
+            return Promise.resolve()
+                .then(() => resolveRelation(this.databaseAdapter, collection, objects, filterInclude(include, fields, 'Relation'), 0))
+                .then(objects => includeRelation(this, acl, fields, objects, filterInclude(include, fields, 'Relation'), 0));
+        }
+        return objects;
+    }
+
+    /**
+     * Delete Object
+     * @param acl
+     * @param name
+     * @param query
+     * @param options
+     * @returns {Promise&lt;*>}
+     */
+    delete(acl, name, query, options) {
+        const isMaster = acl.includes(null);
+        if (!isMaster) {
+            query = this.addWriteCL(query, acl);
+        }
+        return Promise.resolve()
+            .then(() => this.validate(acl, name, 'delete'))
+            .then(() => this.schemaController.getSchema(name))
+            .then((schema) => this.databaseAdapter.delete(schema, query, options));
+    }
+
+    /**
+     * Return the count of the table
+     * @param acl
+     * @param name
+     * @param query
+     * @param options
+     * @returns {Promise&lt;*>}
+     */
+    count(acl, name, query = {}, options) {
+        const isMaster = acl.includes(null);
+        query = isMaster ? query : this.addReadACL(query, acl);
+        return Promise.resolve()
+            .then(() => this.validate(acl, name, 'find'))
+            .then(() => this.schemaController.getSchema(name))
+            .then((schema) => this.databaseAdapter.count(schema, query, options));
+    }
+
+    getSchemaRepository() {
+        return this.schemaController.repository;
+    }
+}
+
+module.exports = DatabaseController;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="App.html">App</a></li><li><a href="Auth.html">Auth</a></li><li><a href="Config.html">Config</a></li><li><a href="CreateObjectUseCase.html">CreateObjectUseCase</a></li><li><a href="DatabaseController.html">DatabaseController</a></li><li><a href="DeleteObjectUseCase.html">DeleteObjectUseCase</a></li><li><a href="EmailVerifyUseCase.html">EmailVerifyUseCase</a></li><li><a href="FindObjectUseCase.html">FindObjectUseCase</a></li><li><a href="GetObjectUseCase.html">GetObjectUseCase</a></li><li><a href="InMemoryCacheAdapter.html">InMemoryCacheAdapter</a></li><li><a href="MongoStorageAdapter.html">MongoStorageAdapter</a></li><li><a href="MoodleAddToCourseUseCase.html">MoodleAddToCourseUseCase</a></li><li><a href="MoodleRemoveUserUseCase.html">MoodleRemoveUserUseCase</a></li><li><a href="MoodleSignUpUseCase.html">MoodleSignUpUseCase</a></li><li><a href="MoodleUpdateUserUseCase.html">MoodleUpdateUserUseCase</a></li><li><a href="NodeMailerAdapter.html">NodeMailerAdapter</a></li><li><a href="PromiseRouter.html">PromiseRouter</a></li><li><a href="SchemaController.html">SchemaController</a></li><li><a href="UpdateObjectUseCase.html">UpdateObjectUseCase</a></li></ul><h3>Global</h3><ul><li><a href="global.html#InMemoryCache">InMemoryCache</a></li><li><a href="global.html#allowCrossDomain">allowCrossDomain</a></li><li><a href="global.html#chainHandlers">chainHandlers</a></li><li><a href="global.html#fetch">fetch</a></li><li><a href="global.html#getAuthBySession">getAuthBySession</a></li><li><a href="global.html#handleAuthorization">handleAuthorization</a></li><li><a href="global.html#handleErrors">handleErrors</a></li><li><a href="global.html#hasPermission">hasPermission</a></li><li><a href="global.html#md5Hash">md5Hash</a></li><li><a href="global.html#promiseHandler">promiseHandler</a></li><li><a href="global.html#queryToJson">queryToJson</a></li><li><a href="global.html#randomString">randomString</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 10:54:46 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

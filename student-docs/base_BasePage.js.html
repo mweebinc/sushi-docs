@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: base/BasePage.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: base/BasePage.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import React from 'react';
+import resolvingPromise from "../resolvingPromise";
+import Context from "../AppContext";
+import getSchemaByClass from "../getSchemaByClass";
+import {dialog} from "nq-component";
+import ProgressDialog from "./ProgressDialog";
+import ConfirmDialog from "./ConfirmDialog";
+
+/**
+ * responsible for global function use for all components
+ */
+
+class BasePage extends React.Component {
+    /**
+     * show Progress
+     */
+    showProgress() {
+        this.setState({progress: true});
+    }
+
+    /**
+     * hide Progress
+     */
+    hideProgress() {
+        this.setState({progress: false});
+    }
+
+    /**
+     * show Dialog
+     * @returns {Promise&lt;*>}
+     */
+    showProgressDialog() {
+        const promise = resolvingPromise();
+        dialog.fire({
+                html: (
+                    &lt;ProgressDialog/>
+                ),
+                footer: false,
+            }
+        );
+        return promise;
+    }
+
+    /**
+     * hide ProgressDialog
+     */
+    hideProgressDialog() {
+        dialog.close();
+    }
+
+    /**
+     * Show error message
+     * @param error
+     * @param title
+     * @param positiveButton
+     * @returns {*|Promise&lt;*>}
+     */
+    showError(error, title, positiveButton) {
+        if (error instanceof Object) {
+            if (error.code === 101) {
+                return this.showError(this.t('invalidUserNamePassword'), this.t('error'), this.t('okay'));
+            }
+            if (error.code === 100) {
+                return this.showError(this.t('unableToConnectToTheInternet'), this.t('error'), this.t('okay'));
+            }
+            if (error.code === 142 &amp;&amp; error.message.includes('required')) {
+                const message = `${this.t(error.message.split(' ')[0], {ns: 'schema'})} ${this.t('isRequired')}`;
+                return this.showError(message, this.t('error'), this.t('okay'));
+            }
+            if (error.code === 142 &amp;&amp; error.message.includes('email format')) {
+                return this.showError(this.t('emailInvalid'), this.t('error'), this.t('okay'));
+            }
+            return this.showError(this.t(error.message), this.t('error'));
+        }
+        if (typeof error === 'string') {
+            const options = {
+                title: title || "Error",
+                message: error,
+                icon: 'bi bi-x-circle',
+                type: 'danger',
+                positiveButton: positiveButton || 'OKAY',
+                negativeButton: false,
+            };
+            return this.showDialog(options)
+        }
+    }
+
+    /**
+     * Show success Dialog
+     * @param message
+     * @param title
+     * @param positiveButton
+     * @returns {Promise&lt;*>}
+     */
+    showSuccess(message, title, positiveButton) {
+        const options = {
+            title: title || "Success",
+            message: message,
+            icon: 'bi bi-check-circle',
+            type: 'success',
+            positiveButton: positiveButton || 'OKAY',
+            negativeButton: false,
+        };
+        return this.showDialog(options);
+    }
+
+    /**
+     * Show Dialog
+     * @param title
+     * @param message
+     * @param icon
+     * @param type
+     * @param options
+     * @returns {Promise&lt;*>}
+     */
+    showDialog({title, message, icon, type, ...options}) {
+        const promise = resolvingPromise();
+        dialog.fire({
+                html: (
+                    &lt;ConfirmDialog
+                        icon={icon}
+                        title={title}
+                        message={message}
+                        type={type}/>
+                ),
+                onPositiveClick: () => {
+                    promise.resolve();
+                },
+                onNegativeClick: () => {
+                    promise.reject();
+                },
+                ...options
+            }
+        );
+        return promise;
+    }
+
+    showSuccessSnackbar(message) {
+        // return showSuccessDialog(message, true);
+    }
+
+    /**
+     * Get all schemas
+     * @returns {*}
+     */
+    getSchemas() {
+        return this.context.schemas;
+    }
+
+    /**
+     * Get schema by its name
+     * @param className
+     * @returns {*}
+     */
+    getSchema(className) {
+        const schemas = this.getSchemas();
+        return getSchemaByClass(schemas, className);
+    }
+
+    /**
+     * Set global schemas
+     * @param schemas
+     */
+    setSchemas(schemas) {
+        this.context.setGlobalState({schemas});
+    }
+
+    /**
+     * Get the current user
+     * @returns {*}
+     */
+    getCurrentUser() {
+        return this.context.user;
+    }
+
+    /**
+     * Set current user
+     * @param user
+     */
+    setCurrentUser(user) {
+        this.context.setGlobalState({user});
+    }
+
+    /**
+     * Set the list of user roles
+     * @param roles
+     */
+    setRoles(roles) {
+        this.context.setGlobalState({roles});
+    }
+
+
+    /**
+     * Get all user roles
+     * @returns {[]|*}
+     */
+    getRoles() {
+        return this.context.roles;
+    }
+
+    /**
+     * Set state with Promise
+     * @param object
+     * @returns {Promise&lt;*>}
+     */
+    setStatePromise(object) {
+        const promise = resolvingPromise();
+        this.setState(object, promise.resolve);
+        return promise
+    }
+
+    /**
+     * Navigate to URL
+     * @param url
+     * @param argument
+     */
+    navigateTo(url, argument) {
+        const params = new URLSearchParams(argument).toString();
+        const navigate = this.props.navigate;
+        if (navigate) {
+            navigate(url);
+        } else {
+            document.location.href = url;
+        }
+    }
+
+    /**
+     * Navigate back
+     */
+    navigateBack() {
+        this.navigateTo(-1);
+    }
+
+    navigateToClass(className) {
+        this.navigateTo('/class/' + className);
+    }
+
+    /**
+     * Get the url parameter
+     * @returns {*}
+     */
+    getParams() {
+        return this.props.location.state;
+    }
+
+    /**
+     * Reload the page
+     */
+    reload() {
+        window.location.reload();
+    }
+
+    /**
+     * translate
+     * @param key
+     * @param options
+     * @param others
+     * @returns {string}
+     */
+    t(key, options, ...others) {
+        return this.context.translation(key, options, ...others);
+    }
+}
+
+BasePage.contextType = Context;
+export default BasePage;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="AppProvider.html">AppProvider</a></li><li><a href="BasePage.html">BasePage</a></li><li><a href="ConfirmDialog.html">ConfirmDialog</a></li><li><a href="MainPagePresenter.html">MainPagePresenter</a></li></ul><h3>Global</h3><ul><li><a href="global.html#Context">Context</a></li><li><a href="global.html#camelToTitleCase">camelToTitleCase</a></li><li><a href="global.html#changes">changes</a></li><li><a href="global.html#classNames">classNames</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#dateFormat">dateFormat</a></li><li><a href="global.html#flatten">flatten</a></li><li><a href="global.html#generateProfile">generateProfile</a></li><li><a href="global.html#getIndexes">getIndexes</a></li><li><a href="global.html#getSchemaByClass">getSchemaByClass</a></li><li><a href="global.html#getValue">getValue</a></li><li><a href="global.html#numberFormat">numberFormat</a></li><li><a href="global.html#passwordStrong">passwordStrong</a></li><li><a href="global.html#resolvingPromise">resolvingPromise</a></li><li><a href="global.html#withRouter">withRouter</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 10:57:08 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

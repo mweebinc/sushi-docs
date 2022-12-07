@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: drivers/http/HTTPResponse.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: drivers/http/HTTPResponse.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @typedef  HTTPResponse
+ * @property {Buffer} buffer The raw byte representation of the response body. Use this to receive binary data. See Buffer for more details.
+ * @property {Object} cookies The cookies sent by the server. The keys in this object are the names of the cookies. The values are Parse.Cloud.Cookie objects.
+ * @property {Object} data The parsed response body as a JavaScript object. This is only available when the response Content-Type is application/x-www-form-urlencoded or application/json.
+ * @property {Object} headers The headers sent by the server. The keys in this object are the names of the headers. We do not support multiple response headers with the same name. In the common case of Set-Cookie headers, please use the cookies field instead.
+ * @property {Number} status The status code.
+ * @property {String} text The raw text representation of the response body.
+ */
+class HTTPResponse {
+    constructor(response, body) {
+        let _text;
+        let _data;
+        this.status = response.statusCode;
+        this.headers = response.headers || {};
+        this.cookies = this.headers['set-cookie'];
+        
+        if (typeof body === 'string') {
+            _text = body;
+        } else if (Buffer.isBuffer(body)) {
+            this.buffer = body;
+        } else if (typeof body === 'object') {
+            _data = body;
+        }
+
+        const getText = () => {
+            if (!_text &amp;&amp; this.buffer) {
+                _text = this.buffer.toString();
+            } else if (!_text &amp;&amp; _data) {
+                _text = JSON.stringify(_data);
+            }
+            return _text;
+        };
+
+        const getData = () => {
+            if (!_data) {
+                try {
+                    _data = JSON.parse(getText());
+                } catch (e) {
+                }
+            }
+            return _data;
+        };
+
+        Object.defineProperty(this, 'body', {
+            get: () => {
+                return body;
+            },
+        });
+
+        Object.defineProperty(this, 'text', {
+            enumerable: true,
+            get: getText,
+        });
+
+        Object.defineProperty(this, 'data', {
+            enumerable: true,
+            get: getData,
+        });
+    }
+}
+
+module.exports = HTTPResponse;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="App.html">App</a></li><li><a href="Auth.html">Auth</a></li><li><a href="Config.html">Config</a></li><li><a href="CreateObjectUseCase.html">CreateObjectUseCase</a></li><li><a href="DatabaseController.html">DatabaseController</a></li><li><a href="DeleteObjectUseCase.html">DeleteObjectUseCase</a></li><li><a href="EmailVerifyUseCase.html">EmailVerifyUseCase</a></li><li><a href="FindObjectUseCase.html">FindObjectUseCase</a></li><li><a href="GetObjectUseCase.html">GetObjectUseCase</a></li><li><a href="InMemoryCacheAdapter.html">InMemoryCacheAdapter</a></li><li><a href="MongoStorageAdapter.html">MongoStorageAdapter</a></li><li><a href="MoodleAddToCourseUseCase.html">MoodleAddToCourseUseCase</a></li><li><a href="MoodleRemoveUserUseCase.html">MoodleRemoveUserUseCase</a></li><li><a href="MoodleSignUpUseCase.html">MoodleSignUpUseCase</a></li><li><a href="MoodleUpdateUserUseCase.html">MoodleUpdateUserUseCase</a></li><li><a href="NodeMailerAdapter.html">NodeMailerAdapter</a></li><li><a href="PromiseRouter.html">PromiseRouter</a></li><li><a href="SchemaController.html">SchemaController</a></li><li><a href="UpdateObjectUseCase.html">UpdateObjectUseCase</a></li></ul><h3>Global</h3><ul><li><a href="global.html#InMemoryCache">InMemoryCache</a></li><li><a href="global.html#allowCrossDomain">allowCrossDomain</a></li><li><a href="global.html#chainHandlers">chainHandlers</a></li><li><a href="global.html#fetch">fetch</a></li><li><a href="global.html#getAuthBySession">getAuthBySession</a></li><li><a href="global.html#handleAuthorization">handleAuthorization</a></li><li><a href="global.html#handleErrors">handleErrors</a></li><li><a href="global.html#hasPermission">hasPermission</a></li><li><a href="global.html#md5Hash">md5Hash</a></li><li><a href="global.html#promiseHandler">promiseHandler</a></li><li><a href="global.html#queryToJson">queryToJson</a></li><li><a href="global.html#randomString">randomString</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 10:54:46 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

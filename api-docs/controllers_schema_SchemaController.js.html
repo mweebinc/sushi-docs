@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/schema/SchemaController.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/schema/SchemaController.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const ParseError = require('../../ParseError');
+const hideHidden = require('./hideHidden');
+const transformValue = require('./mapper/transformValue');
+const hasPermission = require('./hasPermission');
+const addDefault = require('./addDefault');
+const validateValue = require('./validateValue');
+const validateType = require('./validateType');
+
+/**
+ * This class used to validate object
+ */
+class SchemaController {
+    constructor(databaseAdapter) {
+        this.databaseAdapter = databaseAdapter;
+    }
+
+    /**
+     * Check if schema exist
+     * @param name
+     * @returns {PromiseLike&lt;any> | Promise&lt;any>}
+     */
+    isExist(name) {
+        return this.getSchema(name)
+            .then(schema => {
+                if (!schema) {
+                    throw new ParseError(
+                        ParseError.OPERATION_FORBIDDEN, `${name} does not exist`
+                    );
+                }
+            });
+    }
+
+    /**
+     * check the permission
+     * @param acl
+     * @param name
+     * @param operation
+     * @returns {PromiseLike&lt;T>}
+     */
+    validatePermission(acl, name, operation) {
+        return this.getSchema(name)
+            .then(schema => {
+                return Promise.resolve(hasPermission(acl, schema.permissions, operation));
+            })
+            .then(hasPermission => {
+                if (!hasPermission) {
+                    throw new ParseError(
+                        ParseError.OPERATION_FORBIDDEN,
+                        `Permission denied for action ${operation} on ${name}.`
+                    );
+                }
+            });
+    }
+
+    /**
+     * validate the type of the value
+     * @param name
+     * @param object
+     * @returns {PromiseLike&lt;void> | Promise&lt;void>}
+     */
+    validateType(name, object) {
+        return this.getSchema(name)
+            .then(schema => {
+                validateType(schema, object);
+                return Promise.resolve();
+            });
+    }
+
+    /**
+     * validate the value of the object
+     * @param name
+     * @param object
+     * @param isUpdate
+     * @returns {PromiseLike&lt;void> | Promise&lt;void>}
+     */
+    validateValue(name, object, isUpdate) {
+        return this.getSchema(name)
+            .then(schema => validateValue(object, schema.fields, isUpdate));
+    }
+
+    /**
+     * add default value
+     * @param acl
+     * @param name
+     * @param object
+     * @param isUpdate
+     * @returns {PromiseLike&lt;*> | Promise&lt;*>}
+     */
+    addDefault(acl, name, object, isUpdate) {
+        return this.getSchema(name)
+            .then(schema => addDefault(acl, schema.fields, object, isUpdate));
+    }
+
+    /**
+     * transform the data
+     * @param name
+     * @param object
+     * @returns {PromiseLike&lt;*> | Promise&lt;*>}
+     */
+    transformValue(name, object) {
+        return this.getSchema(name)
+            .then(schema => transformValue(schema.fields, object));
+    }
+
+    hideHidden(name, objects) {
+        return this.getSchema(name)
+            .then(schema => hideHidden(objects, schema.fields));
+    }
+
+    /**
+     * Add new schema
+     * @param schema
+     * @returns {*}
+     */
+    addSchema(schema) {
+        return this.databaseAdapter.addSchema(schema);
+    }
+
+    /**
+     * Get Schema
+     * @param collection
+     * @returns {Object}
+     */
+    getSchema(collection) {
+        return this.databaseAdapter.getSchema(collection);
+    }
+
+    /**
+     * Get All schemas
+     * @returns {Object[]}
+     */
+    getAllSchemas() {
+        return this.databaseAdapter.getAllSchemas();
+    }
+
+    /**
+     * Update existing schema
+     * @param acl
+     * @param collection
+     * @param schema
+     * @returns {*}
+     */
+    updateSchema(acl, collection, schema) {
+        const isMaster = acl.includes(null);
+        const query = {_id: collection};
+        if (!isMaster) {
+            query['permissions.modify'] = {$in: acl};
+        }
+        return this.databaseAdapter.updateSchema(query, schema);
+    }
+
+    /**
+     * Delete schema
+     * @param collection
+     * @returns {*}
+     */
+    deleteSchema(collection) {
+        return this.databaseAdapter.deleteSchema(collection);
+    }
+
+
+}
+
+module.exports = SchemaController;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="App.html">App</a></li><li><a href="Auth.html">Auth</a></li><li><a href="Config.html">Config</a></li><li><a href="CreateObjectUseCase.html">CreateObjectUseCase</a></li><li><a href="DatabaseController.html">DatabaseController</a></li><li><a href="DeleteObjectUseCase.html">DeleteObjectUseCase</a></li><li><a href="EmailVerifyUseCase.html">EmailVerifyUseCase</a></li><li><a href="FindObjectUseCase.html">FindObjectUseCase</a></li><li><a href="GetObjectUseCase.html">GetObjectUseCase</a></li><li><a href="InMemoryCacheAdapter.html">InMemoryCacheAdapter</a></li><li><a href="MongoStorageAdapter.html">MongoStorageAdapter</a></li><li><a href="MoodleAddToCourseUseCase.html">MoodleAddToCourseUseCase</a></li><li><a href="MoodleRemoveUserUseCase.html">MoodleRemoveUserUseCase</a></li><li><a href="MoodleSignUpUseCase.html">MoodleSignUpUseCase</a></li><li><a href="MoodleUpdateUserUseCase.html">MoodleUpdateUserUseCase</a></li><li><a href="NodeMailerAdapter.html">NodeMailerAdapter</a></li><li><a href="PromiseRouter.html">PromiseRouter</a></li><li><a href="SchemaController.html">SchemaController</a></li><li><a href="UpdateObjectUseCase.html">UpdateObjectUseCase</a></li></ul><h3>Global</h3><ul><li><a href="global.html#InMemoryCache">InMemoryCache</a></li><li><a href="global.html#allowCrossDomain">allowCrossDomain</a></li><li><a href="global.html#chainHandlers">chainHandlers</a></li><li><a href="global.html#fetch">fetch</a></li><li><a href="global.html#getAuthBySession">getAuthBySession</a></li><li><a href="global.html#handleAuthorization">handleAuthorization</a></li><li><a href="global.html#handleErrors">handleErrors</a></li><li><a href="global.html#hasPermission">hasPermission</a></li><li><a href="global.html#md5Hash">md5Hash</a></li><li><a href="global.html#promiseHandler">promiseHandler</a></li><li><a href="global.html#queryToJson">queryToJson</a></li><li><a href="global.html#randomString">randomString</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 10:54:46 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

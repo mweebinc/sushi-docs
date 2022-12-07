@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: adapters/storage/mongo/MongoStorageAdapter.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: adapters/storage/mongo/MongoStorageAdapter.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const ParseError = require('../../../ParseError');
+const MongoCollection = require('./MongoCollection');
+const createIndex = require('./createIndex');
+const restToMongo = require('./mapper/restToMongo');
+const mongoToRest = require('./mapper/mongoToRest');
+const transformSchema = require('./mapper/transformSchema');
+const reverseSchema = require('./mapper/reverseSchema');
+const transformUpdate = require('./mapper/transformUpdate');
+const transformQuery = require('./mapper/transformQuery');
+const transformKey = require('./mapper/transformKey');
+const SchemaCollectionName = '_schemas';
+
+/**
+ * This class is the implementation of Our Database
+ */
+class MongoStorageAdapter {
+    /**
+     * @param mongodb instance
+     * @param uri the mongodb server
+     * @param options
+     */
+    constructor(mongodb, uri, options = {}) {
+        this.mongodb = mongodb;
+        this.uri = uri;
+        this.options = options;
+        this.options.useNewUrlParser = true;
+        this.options.useUnifiedTopology = true;
+        this.dbName = options.dbName;
+        delete this.options.dbName;
+    }
+
+    /**
+     * Connect to mongodb Server
+     * @returns {*}
+     */
+    connect() {
+        if (this.connectionPromise) {
+            return this.connectionPromise;
+        }
+        this.connectionPromise = this.mongodb.MongoClient
+            .connect(this.uri, this.options)
+            .then(client => {
+                this.client = client;
+                this.database = client.db(this.dbName);
+                this.admin = this.database.admin();
+                // this.database.on('error', () => {
+                //     delete this.connectionPromise;
+                // });
+                // this.database.on('close', () => {
+                //     delete this.connectionPromise;
+                // });
+            })
+            .catch(error => {
+                delete this.connectionPromise;
+                return Promise.reject(error);
+            });
+        return this.connectionPromise;
+    }
+
+    /**
+     * Insert new Object
+     * @param schema
+     * @param object
+     * @param options
+     * @returns {Promise&lt;T>}
+     */
+    insert(schema, object, options) {
+        const mongoObject = restToMongo(schema.fields, object);
+        return this.adaptiveCollection(schema.name)
+            .then(collection => collection.insertOne(mongoObject, options))
+            .catch(this.catchUnique)
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Find objects
+     * @param schema
+     * @param query
+     * @param options
+     * @returns {*}
+     */
+    find(schema, query, options) {
+        return this.adaptiveCollection(schema.name)
+            .then(collection => collection.find(transformQuery(query, schema.fields), options))
+            .then(objects => objects.map(object => mongoToRest(object, schema.fields)))
+            .catch(err => this.handleError(err));
+    }
+
+    distinct(schema, query, field, options) {
+        let collection;
+        const key = transformKey(field);
+        return this.adaptiveCollection(schema.name)
+            .then(_collection => collection = _collection)
+            .then(collection => collection.distinct(key, transformQuery(query, schema.fields), options))
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Update existing Object
+     * @param schema
+     * @param query
+     * @param object
+     * @param options
+     * @returns {Promise&lt;any>}
+     */
+    update(schema, query, object, options) {
+        const mongoObject = restToMongo(schema.fields, object);
+        const mongoUpdate = transformUpdate(mongoObject);
+        return this.adaptiveCollection(schema.name)
+            .then(collection => collection.updateOne(transformQuery(query, schema.fields), mongoUpdate, options))
+            .then((result) => {
+                if (result.lastErrorObject.n === 0) {
+                    throw new ParseError(ParseError.OBJECT_NOT_FOUND, 'Document not found.');
+                }
+                return mongoToRest(result.value, schema.fields);
+            })
+            .catch(this.catchUnique)
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Delete Object
+     * @param schema
+     * @param query
+     * @param options
+     * @returns {*}
+     */
+    delete(schema, query, options) {
+        return this.adaptiveCollection(schema.name)
+            .then(collection => collection.deleteMany(transformQuery(query, schema.fields), options))
+            .then((result) => {
+                if (result.deletedCount === 0) {
+                    throw new ParseError(ParseError.OBJECT_NOT_FOUND, 'Document not found.');
+                }
+                return Promise.resolve();
+            })
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Count the database table
+     * @param schema
+     * @param query
+     * @param options
+     * @returns {Promise&lt;T>}
+     */
+    count(schema, query, options) {
+        return this.adaptiveCollection(schema.name)
+            .then(collection => collection.count(transformQuery(query, schema.fields), options))
+            .catch(err => this.handleError(err));
+    }
+
+    catchUnique(error) {
+        if (error.code === 11000) {
+            const key = Object.entries(error.keyValue)[0][0];
+            throw new ParseError(ParseError.DUPLICATE_VALUE, key + ' should be unique.');
+        }
+        throw error;
+    }
+
+    /**
+     * Delete all tables
+     * @param fast
+     * @returns {PromiseLike&lt;any[]> | Promise&lt;any[]>}
+     */
+    deleteAll(fast = true) {
+        return this.getAllCollections()
+            .then(collections => Promise.all(collections.map(collection => fast ? collection.deleteMany({}) : collection.drop())));
+    }
+
+    /**
+     * Get all tables
+     * @returns {PromiseLike&lt;*>}
+     */
+    getAllCollections() {
+        return this.connect()
+            .then(() => this.database.collections())
+            // exclude system collection
+            .then(collections => collections.filter(collection => !collection.namespace.match(/\.system\./)));
+    }
+
+    /**
+     * Get the table
+     * @param name
+     * @returns {PromiseLike&lt;*> | Promise&lt;*>}
+     */
+    getCollection(name) {
+        return this.connect()
+            .then(() => this.database.collection(name));
+    }
+
+    /**
+     * map raw collection to collection class
+     * @param collection
+     * @returns {*}
+     */
+    adaptiveCollection(collection) {
+        return this.getCollection(collection)
+            .then(mongoCollection => new MongoCollection(mongoCollection))
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Add new schema
+     * @param schema
+     * @returns {Promise&lt;T>}
+     */
+    addSchema(schema) {
+        return this.createIndexes(schema)
+            .then(() => this.adaptiveCollection(SchemaCollectionName))
+            .then(collection => collection.insertOne(transformSchema(schema)))
+            .catch(error => {
+                if (error.code === 11000) {
+                    throw new ParseError(
+                        ParseError.INVALID_CLASS_NAME, `${schema.name} already exists.`
+                    );
+                }
+                throw error;
+            })
+            .catch(this.handleError);
+    }
+
+    /**
+     * Get schema by its name
+     * @param name
+     * @returns {Promise&lt;T>}
+     */
+    getSchema(name) {
+        return this.adaptiveCollection(SchemaCollectionName)
+            .then(collection => collection.find({_id: name}))
+            .then(results => {
+                if (results[0]) return reverseSchema(results[0]);
+                throw new ParseError(ParseError.OPERATION_FORBIDDEN, `${name} does not exist`)
+            })
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Get all schemas
+     * @returns {*}
+     */
+    getAllSchemas() {
+        return this.adaptiveCollection(SchemaCollectionName)
+            .then(collection => collection.find())
+            .then(schemas => schemas.map(reverseSchema))
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Update existing schema
+     * @param query
+     * @param schema
+     * @returns {Promise&lt;void>}
+     */
+    updateSchema(query, schema) {
+        const mongoUpdate = {};
+        mongoUpdate['$set'] = schema;
+        return Promise.resolve()
+            .then(() => this.adaptiveCollection(SchemaCollectionName))
+            .then(collection => collection.updateOne(query, mongoUpdate))
+            .then((result) => {
+                if (result.lastErrorObject.n === 0) {
+                    throw new ParseError(ParseError.OPERATION_FORBIDDEN, "You don't have permission to update");
+                }
+            })
+            .then(() => this.dropIndexes(schema))
+            .then(() => this.createIndexes(schema))
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Delete schema
+     * @param name
+     * @returns {Promise&lt;T>}
+     */
+    deleteSchema(name) {
+        return this.adaptiveCollection(SchemaCollectionName)
+            .then(collection => collection.deleteMany({_id: name}))
+            .then((result) => {
+                if (result.deletedCount === 0) {
+                    throw new ParseError(ParseError.OPERATION_FORBIDDEN, `${name} does not exist`)
+                }
+            })
+            .catch(err => this.handleError(err));
+    }
+
+    /**
+     * Create index to the table
+     * @param schema
+     * @returns {Promise&lt;T>}
+     */
+    createIndexes(schema) {
+        return this.adaptiveCollection(schema.name)
+            .then(({collection}) => {
+                const promises = createIndex(schema.fields)
+                    .map(({key, options}) => collection.createIndex(key, options));
+                return Promise.all(promises);
+            })
+            .catch(err => this.handleError(err));
+    }
+
+    getIndexes(schema) {
+        return this.adaptiveCollection(schema.className)
+            .then(({collection}) => collection.indexInformation())
+    }
+
+    dropIndexes(schema) {
+        return this.adaptiveCollection(schema.name)
+            .then(({collection}) => collection.dropIndexes())
+            .catch(error => {
+                if (error.code === 26) {
+                    return;//ignore not exist
+                    // throw new ParseError(ParseError.INVALID_CLASS_NAME, `indexes for ${schema.className} does not exist.`);
+                }
+                throw error;
+            })
+            .catch(err => this.handleError(err));
+    }
+
+    handleError(error) {
+        if (error &amp;&amp; error.code === 13) {
+            // Unauthorized error
+            delete this.client;
+            delete this.database;
+            delete this.connectionPromise;
+        }
+        throw error;
+    }
+
+    handleShutdown() {
+        if (!this.client) {
+            return Promise.resolve();
+        }
+        delete this.connectionPromise;
+        return this.client.close(false);
+    }
+
+}
+
+module.exports = MongoStorageAdapter;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="App.html">App</a></li><li><a href="Auth.html">Auth</a></li><li><a href="Config.html">Config</a></li><li><a href="CreateObjectUseCase.html">CreateObjectUseCase</a></li><li><a href="DatabaseController.html">DatabaseController</a></li><li><a href="DeleteObjectUseCase.html">DeleteObjectUseCase</a></li><li><a href="EmailVerifyUseCase.html">EmailVerifyUseCase</a></li><li><a href="FindObjectUseCase.html">FindObjectUseCase</a></li><li><a href="GetObjectUseCase.html">GetObjectUseCase</a></li><li><a href="InMemoryCacheAdapter.html">InMemoryCacheAdapter</a></li><li><a href="MongoStorageAdapter.html">MongoStorageAdapter</a></li><li><a href="MoodleAddToCourseUseCase.html">MoodleAddToCourseUseCase</a></li><li><a href="MoodleRemoveUserUseCase.html">MoodleRemoveUserUseCase</a></li><li><a href="MoodleSignUpUseCase.html">MoodleSignUpUseCase</a></li><li><a href="MoodleUpdateUserUseCase.html">MoodleUpdateUserUseCase</a></li><li><a href="NodeMailerAdapter.html">NodeMailerAdapter</a></li><li><a href="PromiseRouter.html">PromiseRouter</a></li><li><a href="SchemaController.html">SchemaController</a></li><li><a href="UpdateObjectUseCase.html">UpdateObjectUseCase</a></li></ul><h3>Global</h3><ul><li><a href="global.html#InMemoryCache">InMemoryCache</a></li><li><a href="global.html#allowCrossDomain">allowCrossDomain</a></li><li><a href="global.html#chainHandlers">chainHandlers</a></li><li><a href="global.html#fetch">fetch</a></li><li><a href="global.html#getAuthBySession">getAuthBySession</a></li><li><a href="global.html#handleAuthorization">handleAuthorization</a></li><li><a href="global.html#handleErrors">handleErrors</a></li><li><a href="global.html#hasPermission">hasPermission</a></li><li><a href="global.html#md5Hash">md5Hash</a></li><li><a href="global.html#promiseHandler">promiseHandler</a></li><li><a href="global.html#queryToJson">queryToJson</a></li><li><a href="global.html#randomString">randomString</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 10:54:46 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

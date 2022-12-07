@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: domain/object/usecases/CreateObjectUseCase.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: domain/object/usecases/CreateObjectUseCase.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// @todo inject config instead of multiple injection
+const ParseError = require('../../../ParseError');
+const MoodleSignUpUseCase = require('../../moodle/MoodleSignUpUseCase');
+const MoodleAddToCourseUseCase = require('../../moodle/MoodleAddToCourseUseCase');
+const MoodleUpdateUserUseCase = require('../../moodle/MoodleUpdateUserUseCase');
+const EmailToken = require('../../../EmailToken');
+
+/**
+ * This Class used to create new Object
+ */
+class CreateObjectUseCase {
+    /**
+     * @param databaseController
+     * @param config
+     */
+    constructor(databaseController, config) {
+        this.databaseController = databaseController;
+        this.config = config;
+        this.response = {};
+        this.moodleSignUpUseCase = new MoodleSignUpUseCase(this.config);
+        this.moodleAddToCourseUseCase = new MoodleAddToCourseUseCase(this.config);
+        this.moodleUpdateUserUseCase = new MoodleUpdateUserUseCase(this.config);
+    }
+
+    /**
+     * Insert Data
+     * @param collection
+     * @param object
+     * @returns {PromiseLike&lt;any> | Promise&lt;any>}
+     */
+    insert(collection, object) {
+        return this.databaseController.insert(this.acl, collection, object)
+            .then(_object => {
+                EmailToken.del(object.token);
+                this.object = _object;
+            });
+    }
+
+    /**
+     * This function check if the collection is User then insert to moodle API
+     * @param collection
+     * @param object
+     * @returns {Promise&lt;*>}
+     */
+    insertMoodle(collection, object) {
+        if (collection === 'users') {
+            return this.moodleSignUpUseCase.execute(object)
+                .then(response => {
+                    const result = response.json();
+                    if (Array.isArray(result) &amp;&amp; result.length === 1) {
+                        this.object.moodleId = result[0].id;
+                        return;
+                    }
+                    if (result instanceof Object &amp;&amp; result.message) {
+                        const query = {id: this.object.id};
+                        return this.databaseController.delete([null], collection, query)
+                            .then(() => {
+                                throw new ParseError(ParseError.VALIDATION_ERROR, result.message);
+                            });
+                    }
+                });
+        }
+    }
+
+    /**
+     * This function suspend the moodle user when signup
+     * @param collection
+     * @returns {Promise&lt;*>}
+     */
+    updateMoodle(collection) {
+        if (collection === 'users') {
+            const user = {id: this.object.moodleId, suspended: 1};
+            return this.moodleUpdateUserUseCase.execute([user]);
+        }
+    }
+
+    updateUser(collection) {
+        if (collection === 'users') {
+            const query = {id: this.object.id};
+            const object = {moodleId: this.object.moodleId};
+            object.acl = {read: ['*', this.object.id], write: [this.object.id, 'role:admin']}
+            return this.databaseController.update([null], collection, query, object);
+        }
+    }
+
+    /**
+     * Add moodle user to course
+     * @param collection
+     * @returns {Promise&lt;*>}
+     */
+    addToCourse(collection) {
+        if (collection === 'users') {
+            return this.moodleAddToCourseUseCase.execute(this.object);
+        }
+    }
+
+
+    getAcl(auth) {
+        return auth.getAcl()
+            .then(acl => {
+                this.acl = acl;
+            });
+    }
+
+    writeResponse() {
+        this.response = this.object;
+        return this.response;
+    }
+
+    /**
+     * Check if the restaurant capacity is full
+     * @param collection
+     * @param object
+     * @returns {Promise&lt;void>}
+     */
+    async restaurantCapacity(collection, object) {
+        if (collection === 'users') {
+            if (!object.restaurant) {
+                throw new ParseError(ParseError.VALIDATION_ERROR, "restaurant is required");
+            }
+            const [restaurant] = await this.databaseController.find([null], 'restaurants', {id: object.restaurant.id});
+            const users = await this.databaseController.find([null], 'users', {restaurant: {id: object.restaurant.id}});
+            if (users.length >= restaurant.capacity) {
+                throw new ParseError(ParseError.VALIDATION_ERROR, "restaurant already full");
+            }
+        }
+    }
+
+    checkToken(collection, object) {
+        if (collection === 'users' &amp;&amp; object.token) {
+            if (!EmailToken.get(object.token)) {
+                throw new ParseError(ParseError.VALIDATION_ERROR, "invalid token");
+            }
+        }
+    }
+
+    execute(auth, collection, object) {
+        return Promise.resolve()
+            .then(() => this.getAcl(auth))
+            // .then(() => this.checkToken(collection, object))
+            .then(() => this.restaurantCapacity(collection, object))
+            .then(() => this.insert(collection, object))
+            .then(() => this.insertMoodle(collection, object))
+            .then(() => this.updateMoodle(collection, object))
+            .then(() => this.updateUser(collection))
+            .then(() => this.addToCourse(collection))
+            .then(() => this.writeResponse());
+    }
+}
+
+module.exports = CreateObjectUseCase;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="App.html">App</a></li><li><a href="Auth.html">Auth</a></li><li><a href="Config.html">Config</a></li><li><a href="CreateObjectUseCase.html">CreateObjectUseCase</a></li><li><a href="DatabaseController.html">DatabaseController</a></li><li><a href="DeleteObjectUseCase.html">DeleteObjectUseCase</a></li><li><a href="EmailVerifyUseCase.html">EmailVerifyUseCase</a></li><li><a href="FindObjectUseCase.html">FindObjectUseCase</a></li><li><a href="GetObjectUseCase.html">GetObjectUseCase</a></li><li><a href="InMemoryCacheAdapter.html">InMemoryCacheAdapter</a></li><li><a href="MongoStorageAdapter.html">MongoStorageAdapter</a></li><li><a href="MoodleAddToCourseUseCase.html">MoodleAddToCourseUseCase</a></li><li><a href="MoodleRemoveUserUseCase.html">MoodleRemoveUserUseCase</a></li><li><a href="MoodleSignUpUseCase.html">MoodleSignUpUseCase</a></li><li><a href="MoodleUpdateUserUseCase.html">MoodleUpdateUserUseCase</a></li><li><a href="NodeMailerAdapter.html">NodeMailerAdapter</a></li><li><a href="PromiseRouter.html">PromiseRouter</a></li><li><a href="SchemaController.html">SchemaController</a></li><li><a href="UpdateObjectUseCase.html">UpdateObjectUseCase</a></li></ul><h3>Global</h3><ul><li><a href="global.html#InMemoryCache">InMemoryCache</a></li><li><a href="global.html#allowCrossDomain">allowCrossDomain</a></li><li><a href="global.html#chainHandlers">chainHandlers</a></li><li><a href="global.html#fetch">fetch</a></li><li><a href="global.html#getAuthBySession">getAuthBySession</a></li><li><a href="global.html#handleAuthorization">handleAuthorization</a></li><li><a href="global.html#handleErrors">handleErrors</a></li><li><a href="global.html#hasPermission">hasPermission</a></li><li><a href="global.html#md5Hash">md5Hash</a></li><li><a href="global.html#promiseHandler">promiseHandler</a></li><li><a href="global.html#queryToJson">queryToJson</a></li><li><a href="global.html#randomString">randomString</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 10:54:46 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
