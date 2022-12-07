@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/shipper/edit/ShipperEditPresenter.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/shipper/edit/ShipperEditPresenter.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import changes from "../../../changes";
+
+/**
+ * This class handle the shipper Page
+ */
+class ShipperEditPresenter {
+    /**
+     * @param view
+     * @param saveObjectUseCase
+     * @param findObjectUseCase
+     * @param updateObjectUseCase
+     */
+    constructor(view, saveObjectUseCase, findObjectUseCase, updateObjectUseCase) {
+        this.view = view;
+        this.saveObjectUseCase = saveObjectUseCase;
+        this.findObjectUseCase = findObjectUseCase;
+        this.updateObjectUseCase = updateObjectUseCase;
+        this.object = {};
+    }
+
+    componentDidMount() {
+        this.init();
+    }
+
+    /**
+     * Initialize the data
+     */
+    init() {
+        const className = this.view.getClassName();
+        const query = {include: ['all']};
+        this.view.showProgress();
+        this.findObjectUseCase
+            .execute(className, query)
+            .then(([object]) => {
+                this.view.hideProgress();
+                this.object = object;
+                this.view.setObject(Object.assign({}, object));
+            })
+            .catch(error => {
+                this.view.hideProgress();
+                this.view.showError(error);
+            });
+    }
+
+    /**
+     * When the user submit the button
+     */
+    submit() {
+        const className = this.view.getClassName();
+        const object = this.view.getObject();
+        this.view.showProgress();
+        if (object.id) {
+            const change = changes(this.object, object);
+            change.id = this.object.id;
+            this.updateObjectUseCase.execute(className, change)
+                .then(() => {
+                    this.view.hideProgress();
+                    this.view.showSuccessSnackbar("Successfully updated!");
+                    this.view.navigateBack();
+                })
+                .catch(error => {
+                    this.view.hideProgress();
+                    this.view.showError(error);
+                });
+        } else {
+            this.saveObjectUseCase.execute(className, object)
+                .then(() => {
+                    this.view.hideProgress();
+                    this.view.showSuccessSnackbar("Successfully saved!");
+                    this.view.navigateBack();
+                })
+                .catch(error => {
+                    this.view.hideProgress();
+                    this.view.showError(error);
+                });
+        }
+    }
+
+    /**
+     * When the user click back button
+     */
+    backClick() {
+        // @todo check if object is un-save show discard
+        this.view.navigateBack();
+    }
+
+}
+
+export default ShipperEditPresenter;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="AppProvider.html">AppProvider</a></li><li><a href="BasePage.html">BasePage</a></li><li><a href="ConfirmDialog.html">ConfirmDialog</a></li><li><a href="CoursePresenter.html">CoursePresenter</a></li><li><a href="MainPagePresenter.html">MainPagePresenter</a></li><li><a href="RestaurantPresenter.html">RestaurantPresenter</a></li><li><a href="ShipperEditPresenter.html">ShipperEditPresenter</a></li><li><a href="SignInPresenter.html">SignInPresenter</a></li><li><a href="UserTablePagePresenter.html">UserTablePagePresenter</a></li></ul><h3>Global</h3><ul><li><a href="global.html#Context">Context</a></li><li><a href="global.html#camelToTitleCase">camelToTitleCase</a></li><li><a href="global.html#changes">changes</a></li><li><a href="global.html#classNames">classNames</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#dateFormat">dateFormat</a></li><li><a href="global.html#flatten">flatten</a></li><li><a href="global.html#generateProfile">generateProfile</a></li><li><a href="global.html#getIndexes">getIndexes</a></li><li><a href="global.html#getSchemaByClass">getSchemaByClass</a></li><li><a href="global.html#getValue">getValue</a></li><li><a href="global.html#numberFormat">numberFormat</a></li><li><a href="global.html#passwordStrong">passwordStrong</a></li><li><a href="global.html#resolvingPromise">resolvingPromise</a></li><li><a href="global.html#withRouter">withRouter</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 14:12:03 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

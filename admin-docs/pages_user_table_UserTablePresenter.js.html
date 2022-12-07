@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/user/table/UserTablePresenter.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/user/table/UserTablePresenter.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import numberFormat from "../../../numberFormat";
+
+/**
+ * This class handle The User Table
+ */
+class UserTablePagePresenter {
+    /**
+     * @param view
+     * @param findObjectUseCase
+     * @param updateObjectUseCase
+     * @param deleteObjectUseCase
+     * @param exportCSVUseCase
+     */
+    constructor(view, findObjectUseCase, updateObjectUseCase, deleteObjectUseCase, exportCSVUseCase) {
+        this.view = view;
+        this.findObjectUseCase = findObjectUseCase;
+        this.updateObjectUseCase = updateObjectUseCase;
+        this.deleteObjectUseCase = deleteObjectUseCase;
+        this.exportCSVUseCase = exportCSVUseCase;
+    }
+
+    componentDidMount() {
+        this.init();
+        this.getData();
+    }
+
+    /**
+     * Initialize
+     */
+    init() {
+        this.limit = 10;
+        this.current = 1;
+        this.where = {};
+        this.documents = [];
+        this.isShowDeleted = false;
+        this.view.setLimit(this.limit);
+        this.view.setObjects([]);
+    }
+
+    /**
+     * Get all the data
+     * @returns {*}
+     */
+    getData() {
+        const className = this.view.getClassName();
+        const skip = (this.current - 1) * this.limit;
+        const query = {
+            count: true,
+            limit: this.limit,
+            skip: skip,
+            where: this.where,
+            include: ['all'],
+            sort: {createdAt: -1}
+        };
+        query.where.isDelete = this.isShowDeleted ? true : {$ne: true};
+        this.setProgress(true);
+        return this.findObjectUseCase.execute(className, query)
+            .then(({count, objects}) => {
+                this.documents = objects;
+                this.view.setCount(count);
+                this.view.setCurrent(this.current);
+                this.view.setObjects(this.documents);
+                this.view.hideProgress();
+            })
+            .catch(error => {
+                this.view.hideProgress();
+                this.view.showError(error);
+            });
+    }
+
+    setProgress(progress) {
+        this.progress = progress;
+        if (progress) {
+            this.view.showProgress();
+        } else {
+            this.view.hideProgress();
+        }
+    }
+
+    componentDidUpdate(prevProps) {
+
+    }
+
+    /**
+     * When each item click
+     * @param index
+     */
+    onItemClick(index) {
+        const document = this.documents[index];
+        const className = this.view.getClassName();
+        this.view.navigateToForm(className, document.id);
+    }
+
+    /**
+     * When checkbox click
+     * @param index
+     */
+    onSelect(index) {
+        const selectedObjects = this.view.getSelected();
+        const selected = this.documents[index];
+        const i = selectedObjects.indexOf(selected);
+        if (i > -1) {
+            selectedObjects.splice(i, 1);
+        } else {
+            selectedObjects.push(selected);
+        }
+        this.view.setSelected(selectedObjects);
+    }
+
+    /**
+     * When user submit the search button
+     * @param where
+     */
+    searchSubmit(where) {
+        this.init();
+        this.where = where;
+        this.getData();
+    }
+
+
+    loadMore() {
+        if (!this.progress) {
+            this.current++;
+            this.getData();
+        }
+    }
+
+    onSelectAll(checked) {
+        if (checked) {
+            this.view.setSelected([...this.documents]);
+        } else {
+            this.view.setSelected([]);
+        }
+    }
+
+    /**
+     * When the user export the data to CSV
+     */
+    exportClick() {
+        const objects = this.view.getSelected();
+        const date = new Date();
+        const filename = `${date.getFullYear()}${numberFormat(date.getMonth() + 1, 2)}${numberFormat(date.getDate(), 2)}_${this.view.t('studentInformation')}.csv`;
+        const format = objects.map(o => {
+            const object = {};
+            object[this.view.t('id', {ns: 'schema'})] = o.id;
+            object[this.view.t('familyName', {ns: 'schema'})] = o.familyName;
+            object[this.view.t('lastName', {ns: 'schema'})] = o.lastName;
+            object[this.view.t('familyNameKana', {ns: 'schema'})] = o.familyNameKana;
+            object[this.view.t('lastNameKana', {ns: 'schema'})] = o.lastNameKana;
+            object[this.view.t('course', {ns: 'schema'})] = o.course.fullName;
+            object[this.view.t('restaurant', {ns: 'schema'})] = o.restaurant.name;
+            return object;
+        });
+        this.exportCSVUseCase.execute(format, filename, {
+            encoding: 'Shift-JIS',
+            quotes: true,
+            header: false,
+
+        })
+            .then(() => {
+                //hide progress
+            });
+    }
+
+    /**
+     * When the user click add button
+     */
+    addClick() {
+        this.view.navigateToForm(this.view.getClassName());
+    }
+
+    /**
+     * When the user click delete button
+     */
+    deleteSelected() {
+        if (this.isShowDeleted) {
+            this.restoreData();
+        } else {
+            this.deleteData();
+        }
+    }
+
+    deleteData() {
+        const selected = this.view.getSelected();
+        const collection = this.view.getClassName();
+        const options = {
+            title: this.view.t('deleteData'), message: this.view.t('deleteDataMessage'),
+            positiveButton: this.view.t('delete'),
+            negativeButton: this.view.t('cancel')
+        }
+        this.view.showDialog(options)
+            .then(() => Promise.all(selected.map(o => this.deleteObjectUseCase.execute(collection, o.id))))
+            .then(() => {
+                this.documents = this.documents.filter(o => !selected.includes(o));
+                this.view.setSelected([]);
+                this.view.setObjects(this.documents);
+            })
+            .catch((error) => {
+                this.view.hideProgress();
+                this.view.showError(error);
+            });
+    }
+
+    restoreData() {
+        const selected = this.view.getSelected();
+        const collection = this.view.getClassName();
+        const options = {
+            title: this.view.t('restoreData'), message: this.view.t('restoreDataMessage'),
+            positiveButton: this.view.t('restore'),
+            negativeButton: this.view.t('cancel')
+        }
+        this.view.showDialog(options)
+            .then(() => Promise.all(selected.map(o => this.updateObjectUseCase.execute(collection, {
+                id: o.id,
+                isDelete: false
+            }))))
+            .then(() => {
+                this.documents = this.documents.filter(o => !selected.includes(o));
+                this.view.setSelected([]);
+                this.view.setObjects(this.documents);
+            })
+            .catch((error) => {
+                this.view.hideProgress();
+                this.view.showError(error);
+            });
+    }
+
+    /**
+     * When the course is selected
+     * @param index
+     */
+    onCourseClick(index) {
+        const selected = this.documents[index];
+        this.view.navigateTo('/users/course/' + selected.id);
+    }
+    
+    setCurrentPage(page) {
+        this.current = page;
+        this.documents = [];
+        this.view.setCurrent(page);
+        this.view.setObjects([]);
+        this.getData();
+    }
+
+    onChangeLimit(limit) {
+        this.init();
+        this.limit = limit;
+        this.view.setLimit(this.limit);
+        this.getData();
+    }
+
+    onClickToggleDelete() {
+        this.isShowDeleted = !this.isShowDeleted;
+        this.view.setIsShowDelete(this.isShowDeleted);
+        this.getData();
+    }
+
+}
+
+export default UserTablePagePresenter;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="AppProvider.html">AppProvider</a></li><li><a href="BasePage.html">BasePage</a></li><li><a href="ConfirmDialog.html">ConfirmDialog</a></li><li><a href="CoursePresenter.html">CoursePresenter</a></li><li><a href="MainPagePresenter.html">MainPagePresenter</a></li><li><a href="RestaurantPresenter.html">RestaurantPresenter</a></li><li><a href="ShipperEditPresenter.html">ShipperEditPresenter</a></li><li><a href="SignInPresenter.html">SignInPresenter</a></li><li><a href="UserTablePagePresenter.html">UserTablePagePresenter</a></li></ul><h3>Global</h3><ul><li><a href="global.html#Context">Context</a></li><li><a href="global.html#camelToTitleCase">camelToTitleCase</a></li><li><a href="global.html#changes">changes</a></li><li><a href="global.html#classNames">classNames</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#dateFormat">dateFormat</a></li><li><a href="global.html#flatten">flatten</a></li><li><a href="global.html#generateProfile">generateProfile</a></li><li><a href="global.html#getIndexes">getIndexes</a></li><li><a href="global.html#getSchemaByClass">getSchemaByClass</a></li><li><a href="global.html#getValue">getValue</a></li><li><a href="global.html#numberFormat">numberFormat</a></li><li><a href="global.html#passwordStrong">passwordStrong</a></li><li><a href="global.html#resolvingPromise">resolvingPromise</a></li><li><a href="global.html#withRouter">withRouter</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 14:12:03 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

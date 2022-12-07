@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/address form/AddressFormPresenter.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/address form/AddressFormPresenter.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import changes from "../../changes";
+
+/**
+ * This class handle Address Form Page
+ */
+class AddressFormPresenter {
+    saveObjectUseCase;
+
+    /**
+     * @param view
+     * @param findObjectUseCase
+     * @param saveObjectUseCase
+     * @param updateObjectUseCase
+     */
+    constructor(view, findObjectUseCase, saveObjectUseCase, updateObjectUseCase) {
+        this.view = view;
+        this.findObjectUseCase = findObjectUseCase;
+        this.updateObjectUseCase = updateObjectUseCase;
+        this.saveObjectUseCase = saveObjectUseCase;
+        this.object = {};
+    }
+
+    /**
+     * Initialize the data
+     */
+    init() {
+        this.user = this.view.getCurrentUser()
+        this.getUser();
+    }
+
+    /**
+     * When user click submit button
+     */
+    submit() {
+        this.view.showProgress();
+        Promise.resolve()
+            .then(() => this.saveUser())
+            .then(() => {
+                this.view.hideProgress();
+                this.view.showSuccess('Address Successfully Added!');
+                this.view.navigateTo('/my-addresses')
+            })
+            .catch(error => {
+                this.view.hideProgress();
+                this.view.showError(error);
+            })
+    }
+
+    /**
+     * Save the current user
+     * @returns {*}
+     */
+    saveUser() {
+        const user = this.view.getObject()
+        const user1 = {
+            id: user.id,
+            recipients: [user.recipients]
+        }
+
+        const action = this.updateObjectUseCase;
+        const change = changes(this.user, user1);
+        change.id = user1.id;
+        return action.execute('users', change)
+            .then(_user => {
+
+            })
+    }
+
+    /**
+     * Get current user
+     * @returns {*}
+     */
+    getUser() {
+        const user = this.view.getCurrentUser();
+        const id = user.id;
+
+        this.view.showProgress()
+        const query = {include: ['all'], where: {id}};
+        return this.findObjectUseCase.execute('users', query)
+            .then(([result]) => {
+                this.object = result
+                this.view.setObject(Object.assign({}, result));
+                this.view.hideProgress()
+            })
+            .catch(error => {
+                this.view.hideProgress();
+                this.view.showError(error);
+            })
+    }
+
+    /**
+     * When user click back button
+     */
+    backClick() {
+        this.view.navigateBack();
+    }
+}
+
+export default AddressFormPresenter;</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="AddressFormPresenter.html">AddressFormPresenter</a></li><li><a href="AppProvider.html">AppProvider</a></li><li><a href="ChangeDeliveryAddressPresenter.html">ChangeDeliveryAddressPresenter</a></li><li><a href="ChangeEmailPresenter.html">ChangeEmailPresenter</a></li><li><a href="ChangePasswordPresenter.html">ChangePasswordPresenter</a></li><li><a href="ChangeUserInfoPresenter.html">ChangeUserInfoPresenter</a></li><li><a href="FishDeliveryPresenter.html">FishDeliveryPresenter</a></li><li><a href="MainPresenter.html">MainPresenter</a></li><li><a href="MyAddressesPresenter.html">MyAddressesPresenter</a></li><li><a href="MyPagePresenter.html">MyPagePresenter</a></li><li><a href="PreSignupPresenter.html">PreSignupPresenter</a></li><li><a href="ShippingDetailsPresenter.html">ShippingDetailsPresenter</a></li><li><a href="SignInPresenter.html">SignInPresenter</a></li><li><a href="SignupPresenter.html">SignupPresenter</a></li></ul><h3>Global</h3><ul><li><a href="global.html#Context">Context</a></li><li><a href="global.html#camelToTitleCase">camelToTitleCase</a></li><li><a href="global.html#changes">changes</a></li><li><a href="global.html#classNames">classNames</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#dateFormat">dateFormat</a></li><li><a href="global.html#getDaysDifference">getDaysDifference</a></li><li><a href="global.html#getSchemaByClass">getSchemaByClass</a></li><li><a href="global.html#passwordStrong">passwordStrong</a></li><li><a href="global.html#randomString">randomString</a></li><li><a href="global.html#resolvingPromise">resolvingPromise</a></li><li><a href="global.html#sortByCreatedAt">sortByCreatedAt</a></li><li><a href="global.html#withRouter">withRouter</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 14:32:00 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/change delivery address/ChangeDeliveryAddressPresenter.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/change delivery address/ChangeDeliveryAddressPresenter.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import changes from "../../changes";
+import getDaysDifference from "../../getDaysDifference";
+import sortByCreatedAt from "../../sortByCreatedAt";
+
+/**
+ * This class handle Deliver Address Page
+ */
+class ChangeDeliveryAddressPresenter {
+    /**
+     * @param view
+     * @param findObjectUseCase
+     * @param updateObjectUseCase
+     */
+    constructor(view, findObjectUseCase, updateObjectUseCase) {
+        this.view = view;
+        this.findObjectUseCase = findObjectUseCase;
+        this.updateObjectUseCase = updateObjectUseCase;
+        this.recipients = [];
+        this.MAX_DAY_OF_CHANGE = 7;
+    }
+
+    init() {
+        this.getData();
+    }
+
+    /**
+     * Get the data
+     */
+    getData() {
+        const user = this.view.getUser();
+        this.user = user;
+        const id = user.id
+        const query = {include: ['all'], where: {id}}
+        this.view.showProgress();
+        this.findObjectUseCase.execute('users', query)
+            .then(([result]) => {
+                const recipients = result.recipients;
+                sortByCreatedAt(recipients)
+                   .map(recipient => {
+                    this.recipients.push(recipient);
+                    this.view.setRecipients(this.recipients);
+                    this.view.hideProgress();
+                })
+            })
+            .catch(error => {
+                if (error.code === 209){
+                    this.view.showError(this.view.t('invalid_token'), this.view.t('error'));
+                    this.view.navigateTo('/signin');
+                }
+            })
+    }
+
+    /**
+     * Get the shipping
+     * @returns {*}
+     */
+    fetchShipping() {
+        const shippingId = this.view.getShippingId();
+        const query = {where: {id: shippingId}}
+        return this.findObjectUseCase.execute('shippings', query);
+    }
+
+    /**
+     * When user click change button
+     */
+    onChangeClick(){
+        const current = this.shipping;
+        const deliveryDate = new Date(current.arrivalDate);
+        const currentDate = new Date();
+        const daysDifference = getDaysDifference(deliveryDate, currentDate);
+
+        if(daysDifference &lt; this.MAX_DAY_OF_CHANGE){
+            // this.view.showError('You can only change delivery address 7 days prior to delivery date. \n\nRemaining Days: ' + Math.trunc(daysDifference));
+            this.view.showError(this.view.t('you_can_only_change_delivery_address_7_days_prior_to_delivery_date_remaining_days') + Math.trunc(daysDifference), this.view.t('error'));
+            return;
+        }
+
+
+        if(!this.selectedRecipient){
+            this.view.showError(this.view.t('please_select_a_delivery_address'), this.view.t('error'));
+            return
+        }
+
+        const change = changes(this.shipping, this.selectedRecipient);
+
+        change.id = this.shipping.id;
+        change.acl = this.shipping.acl;
+        change.recipientName = this.selectedRecipient.name;
+        change.recipientNameKana = this.selectedRecipient.nameKana;
+
+        //remove unused field
+        delete change.isDefault;
+        delete change.nameKana;
+        delete change.name;
+
+        const options = {
+            title : this.view.t("change_delivery_confirm"),
+            message : this.view.t("change_recipient_confirmation_note"),
+            positiveButton : this.view.t("ok"),
+            negativeButton: this.view.t("cancel")
+        }
+
+        this.view.showDialog(options)
+            .then(() => {
+                this.updateObjectUseCase.execute('shippings', change)
+                    .then(() => {
+                        this.view.navigateTo('/fish-delivery');
+                    })
+                    .catch(error => {
+                        this.view.showError(error);
+                    })
+
+            })
+            .catch(error => {
+                this.view.showError(error);
+            })
+
+
+
+    }
+
+    onBackClick(){
+        this.view.navigateTo('/fish-delivery')
+    }
+
+    /**
+     * Set shipping
+     * @param selectedRecipient
+     */
+    setShipping(selectedRecipient) {
+        this.selectedRecipient = selectedRecipient;
+
+        this.fetchShipping()
+            .then(([shipping]) => {
+                this.shipping = shipping;
+                const change = changes(this.shipping, selectedRecipient);
+                console.log(change)
+                // change.id = this.shipping.id;
+                // change.recipientName = selectedRecipient.name;
+                // change.recipientNameKana = selectedRecipient.nameKana;
+                //
+                // //remove unused field
+                // delete change.isDefault;
+                // delete change.nameKana;
+                // delete change.name;
+                //
+                // this.updateObjectUseCase.execute('shippings', change)
+                //     .then(() => {
+                //         this.view.showSuccess(this.view.t('your_delivery_address_was_changed'), this.view.t('success'));
+                //     })
+                //     .catch(error => {
+                //         this.view.showError(error);
+                //     })
+            })
+            .catch(error => {
+                this.view.showError(error);
+            })
+    }
+}
+
+export default ChangeDeliveryAddressPresenter;</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="AddressFormPresenter.html">AddressFormPresenter</a></li><li><a href="AppProvider.html">AppProvider</a></li><li><a href="ChangeDeliveryAddressPresenter.html">ChangeDeliveryAddressPresenter</a></li><li><a href="ChangeEmailPresenter.html">ChangeEmailPresenter</a></li><li><a href="ChangePasswordPresenter.html">ChangePasswordPresenter</a></li><li><a href="ChangeUserInfoPresenter.html">ChangeUserInfoPresenter</a></li><li><a href="FishDeliveryPresenter.html">FishDeliveryPresenter</a></li><li><a href="MainPresenter.html">MainPresenter</a></li><li><a href="MyAddressesPresenter.html">MyAddressesPresenter</a></li><li><a href="MyPagePresenter.html">MyPagePresenter</a></li><li><a href="PreSignupPresenter.html">PreSignupPresenter</a></li><li><a href="ShippingDetailsPresenter.html">ShippingDetailsPresenter</a></li><li><a href="SignInPresenter.html">SignInPresenter</a></li><li><a href="SignupPresenter.html">SignupPresenter</a></li></ul><h3>Global</h3><ul><li><a href="global.html#Context">Context</a></li><li><a href="global.html#camelToTitleCase">camelToTitleCase</a></li><li><a href="global.html#changes">changes</a></li><li><a href="global.html#classNames">classNames</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#dateFormat">dateFormat</a></li><li><a href="global.html#getDaysDifference">getDaysDifference</a></li><li><a href="global.html#getSchemaByClass">getSchemaByClass</a></li><li><a href="global.html#passwordStrong">passwordStrong</a></li><li><a href="global.html#randomString">randomString</a></li><li><a href="global.html#resolvingPromise">resolvingPromise</a></li><li><a href="global.html#sortByCreatedAt">sortByCreatedAt</a></li><li><a href="global.html#withRouter">withRouter</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 14:32:00 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

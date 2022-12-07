@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: pages/change user info/ChangeUserInfoPresenter.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: pages/change user info/ChangeUserInfoPresenter.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import changes from "../../changes";
+
+/**
+ * This class handle the Change User Info Page
+ */
+class ChangeUserInfoPresenter {
+    /**
+     * @param view
+     * @param updateObjectUseCase
+     * @param findObjectUseCase
+     * @param saveObjectUseCase
+     */
+    constructor(view, updateObjectUseCase, findObjectUseCase, saveObjectUseCase) {
+        this.view = view
+        this.updateObjectUseCase = updateObjectUseCase;
+        this.findObjectUseCase = findObjectUseCase;
+        this.saveObjectUseCase = saveObjectUseCase;
+    }
+
+    /**
+     * Initialize User Data
+     */
+    init() {
+        this.user = this.view.getCurrentUser();
+        this.setData();
+        this.fetchShipping();
+    }
+
+    /**
+     * Add new Recipient
+     * @param recipients
+     */
+    addRecipient(recipients){
+        recipients.push(Object.assign({isDefault : false}));
+        this.view.setNewRecipients(recipients);
+    }
+
+    goBack(){
+        this.view.navigateBack();
+    }
+
+    /**
+     * Set the All Data
+     */
+    setData(){
+        const id = this.user.id
+        const query = {include: ['all'], where: {id}}
+        this.setProgress(true);
+        this.findObjectUseCase.execute('users', query)
+            .then(([result]) => {
+                this.object = result;
+
+                this.view.setObject(result);
+                const recipients = result.recipients.sort(recipient => {
+                    //sort by default address
+                    return recipient.isDefault ? -1 : 1;
+                });
+                //set current default recipient
+                recipients.map(recipient => {
+                    if(recipient.isDefault){
+                        this.view.selectRecipientDefault(recipient)
+                    }
+                })
+                this.view.setRecipients(recipients);
+                this.setProgress(false);
+            })
+            .catch(error => {
+                this.setProgress(false);
+                this.view.showError(this.view.t('invalid_token'), this.view.t('error'));
+                if (error.code === 209){
+                    this.view.navigateTo('/signin');
+                }
+            });
+    }
+
+    /**
+     * Get the shipping data
+     */
+    fetchShipping(){
+        const query = {where : {user: {id: this.user.id}}}
+        this.findObjectUseCase.execute('shippings', query)
+            .then(shipping => {
+                this.shipping = shipping
+            })
+            .catch(error => {
+                console.log(error);
+            })
+    }
+
+
+    updateShipping(currentDefault){
+
+        const change = changes(this.shipping, currentDefault);
+
+
+    }
+
+    /**
+     * Save Object
+     * @param object
+     */
+    onSave(object){
+        //get updates from user
+        const currentObject = this.view.getCurrentUser();
+
+        const userChange = changes(currentObject, object);
+        const currentDefault = this.view.getDefaultRecipient();
+
+
+        //retrieve all shipping
+        if(this.shipping.length > 0){
+            this.updateShipping(currentDefault)
+        }
+
+        // userChange.recipients =  this.view.getRecipients();
+        // console.log('userchange',userChange.recipients)
+
+        //get id
+        userChange.id = currentObject.id;
+
+        //get status
+        userChange.active = currentObject.active;
+        //update user info
+
+        const promises = [];
+        userChange.recipients.map(recipient => {
+            recipient.acl = currentObject.acl;
+
+            //set selected recipient true and others to false
+            // recipient.id === currentDefault.id ? recipient.isDefault = true : recipient.isDefault = false;
+            if(recipient.id){
+                recipient.id === currentDefault.id ? recipient.isDefault = true : recipient.isDefault = false;
+            }
+
+            // if (recipient.id === currentDefault.id)
+            // {
+            //     recipient.isDefault = true;
+            //     console.log()
+            // }else{
+            //     recipient.isDefault = false;
+            // }
+                if(recipient.id){
+                    promises.push(this.updateObjectUseCase.execute('recipients', recipient));
+                }else{
+                    promises.push(this.saveObjectUseCase.execute('recipients', recipient));
+                }
+            })
+            promises.push(this.updateObjectUseCase.execute('users', userChange));
+            Promise.all(promises)
+                .then(() => {
+                    this.setProgress(true);
+                    //clear recipient state
+                    this.view.setNewRecipients([]);
+                    this.setProgress(false);
+
+                    this.view.showSuccess(this.view.t('details_updated'), this.view.t('success'));
+                    this.view.navigateTo('/');
+
+                })
+                .catch(error => {
+                    this.setProgress(false)
+                    if(error.message === 'address1 should be maximum length of 48.'){
+                        this.view.showError(this.view.t('address1_max_length_error'), this.view.t('update_fail'), this.view.t('ok'))
+                        return;
+                    }
+                    if(error.message === 'address2 should be maximum length of 50.'){
+                        this.view.showError(this.view.t('address2_max_length_error'), this.view.t('update_fail'), this.view.t('ok'))
+                        return;
+                    }
+                    this.view.showError(this.view.t(error.message), this.view.t('update_fail'), this.view.t('ok'));
+        })
+    }
+
+    setProgress(progress) {
+        this.progress = progress;
+        if (progress) {
+            this.view.showProgress();
+        } else {
+            this.view.hideProgress();
+        }
+    }
+}
+
+export default ChangeUserInfoPresenter;</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="AddressFormPresenter.html">AddressFormPresenter</a></li><li><a href="AppProvider.html">AppProvider</a></li><li><a href="ChangeDeliveryAddressPresenter.html">ChangeDeliveryAddressPresenter</a></li><li><a href="ChangeEmailPresenter.html">ChangeEmailPresenter</a></li><li><a href="ChangePasswordPresenter.html">ChangePasswordPresenter</a></li><li><a href="ChangeUserInfoPresenter.html">ChangeUserInfoPresenter</a></li><li><a href="FishDeliveryPresenter.html">FishDeliveryPresenter</a></li><li><a href="MainPresenter.html">MainPresenter</a></li><li><a href="MyAddressesPresenter.html">MyAddressesPresenter</a></li><li><a href="MyPagePresenter.html">MyPagePresenter</a></li><li><a href="PreSignupPresenter.html">PreSignupPresenter</a></li><li><a href="ShippingDetailsPresenter.html">ShippingDetailsPresenter</a></li><li><a href="SignInPresenter.html">SignInPresenter</a></li><li><a href="SignupPresenter.html">SignupPresenter</a></li></ul><h3>Global</h3><ul><li><a href="global.html#Context">Context</a></li><li><a href="global.html#camelToTitleCase">camelToTitleCase</a></li><li><a href="global.html#changes">changes</a></li><li><a href="global.html#classNames">classNames</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#dateFormat">dateFormat</a></li><li><a href="global.html#getDaysDifference">getDaysDifference</a></li><li><a href="global.html#getSchemaByClass">getSchemaByClass</a></li><li><a href="global.html#passwordStrong">passwordStrong</a></li><li><a href="global.html#randomString">randomString</a></li><li><a href="global.html#resolvingPromise">resolvingPromise</a></li><li><a href="global.html#sortByCreatedAt">sortByCreatedAt</a></li><li><a href="global.html#withRouter">withRouter</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Wed Dec 07 2022 14:32:00 GMT+0800 (Philippine Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
